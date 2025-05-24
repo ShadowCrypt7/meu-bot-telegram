@@ -177,21 +177,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         print(f"[DEBUG] Erro ao notificar admin: {e}")
 
-
-    # Salva no dicionário e arquivo com chat_id
-    usuarios_aprovados[username] = chat_id
-    salvar_aprovados()
-
-    await update.message.reply_text("📩 Comprovante recebido! Aguarde confirmação do admin...")
-
-    try:
-        await context.bot.send_message(
-            chat_id=int(USUARIO_ADMIN),
-            text=f"📢 Novo comprovante enviado por @{username}.\nUse /liberar @{username} se estiver tudo certo!"
-        )
-    except Exception as e:
-        print(f"Erro ao notificar admin: {e}")
-
+        
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remetente_id = update.effective_user.id
 
