@@ -148,12 +148,12 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         if update.message.photo:
             file = await update.message.photo[-1].get_file()
             file_path = f"{nome_base}.jpg"
-            await file.download_to_disk(file_path)
+            await file.download_to_drive(file_path)
 
         elif update.message.document:
             file = await update.message.document.get_file()
             file_path = f"{nome_base}.pdf"
-            await file.download_to_disk(file_path)
+            await file.download_to_drive(file_path)
 
     except Exception as e:
         await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
