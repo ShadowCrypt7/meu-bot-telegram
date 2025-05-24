@@ -1,3 +1,4 @@
+
 import os
 import datetime
 import threading
@@ -13,20 +14,18 @@ from telegram.ext import (
     filters, ContextTypes
 )
 
-# 🔐 Carregar variáveis do .env
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 LINK_SUPORTE = os.getenv("LINK_SUPORTE")
 GRUPO_EXCLUSIVO = os.getenv("GRUPO_EXCLUSIVO")
 USUARIO_ADMIN = os.getenv("USUARIO_ADMIN")
 
-# Variável global pro bot
 bot = None
 
-# 🗂️ Pasta de comprovantes
-os.makedirs("comprovantes", exist_ok=True)
+# 🗂️ Pasta de comprovantes com caminho absoluto
+pasta_comprovantes = os.path.join(os.path.expanduser("~"), "Documents", "IAdoDjabo.py", "comprovantes")
+os.makedirs(pasta_comprovantes, exist_ok=True)
 
-# 🧠 Carrega usuários aprovados
 usuarios_aprovados = {}
 try:
     with open("aprovados.txt", "r") as f:
@@ -44,7 +43,6 @@ def salvar_aprovados():
             f.write(f"{username}|{chat_id}\n")
 
 
-# ------ Flask + Webhook PicPay ------
 flask_app = Flask(__name__)
 
 @flask_app.route('/webhook-picpay', methods=['POST'])
@@ -80,8 +78,6 @@ def webhook_picpay():
     return '', 200
 
 
-# ------ Funções do Bot ------
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔥 Mensal R$9,90 🔥", callback_data='plano_mensal')],
@@ -116,9 +112,7 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔑 Chave Pix: `055.336.041-89`\n\n"
     )
 
-    msg2 = (
-        "Deu certo amor? Envie o comprovante aqui pra liberar seu conteúdo! 🙈🔥"
-    )
+    msg2 = "Deu certo amor? Envie o comprovante aqui pra liberar seu conteúdo! 🙈🔥"
 
     await update.callback_query.message.reply_text(msg, parse_mode="Markdown")
     await update.callback_query.message.reply_text(msg2, parse_mode="Markdown")
@@ -137,12 +131,8 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
         return
 
-    pasta = "comprovantes"
-    if not os.path.exists(pasta):
-        os.makedirs(pasta)
-
     agora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    nome_base = f"{pasta}/{username}_{agora}"
+    nome_base = os.path.join(pasta_comprovantes, f"{username}_{agora}")
 
     try:
         if update.message.photo:
@@ -220,7 +210,6 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, parse_mode="Markdown")
 
 
-# 🔧 Definir comandos do menu do bot
 async def definir_comandos(app):
     comandos = [
         BotCommand("start", "Ver planos disponíveis"),
@@ -232,13 +221,11 @@ async def definir_comandos(app):
     await app.bot.set_my_commands(comandos)
 
 
-# 🔃 Iniciar Flask em thread paralela
 def start_flask():
     port = int(os.environ.get('PORT', 10000))
     flask_app.run(host='0.0.0.0', port=port)
 
 
-# 🚀 MAIN
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=start_flask)
     flask_thread.daemon = True
