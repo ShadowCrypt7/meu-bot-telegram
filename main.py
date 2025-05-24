@@ -148,16 +148,6 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_path = f"{nome_base}.pdf"
             await file.download_to_drive(file_path)
 
-        await update.message.reply_text("📩 Comprovante recebido! Aguarde confirmação do admin...")
-
-        usuarios_aprovados[username] = chat_id
-        salvar_aprovados()
-
-        await context.bot.send_message(
-            chat_id=int(USUARIO_ADMIN),
-            text=f"📢 Novo comprovante enviado por @{username}.\nUse /liberar @{username} se estiver tudo certo!"
-        )
-
     except Exception as e:
         await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
 
