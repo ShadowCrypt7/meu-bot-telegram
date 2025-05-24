@@ -1,8 +1,10 @@
-
 import os
 import datetime
 import threading
 import asyncio
+import smtplib
+import ssl
+from email.message import EmailMessage
 
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -14,18 +16,24 @@ from telegram.ext import (
     filters, ContextTypes
 )
 
+# 🔑 Carregar variáveis do .env
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 LINK_SUPORTE = os.getenv("LINK_SUPORTE")
 GRUPO_EXCLUSIVO = os.getenv("GRUPO_EXCLUSIVO")
 USUARIO_ADMIN = os.getenv("USUARIO_ADMIN")
 
+EMAIL_ORIGEM = os.getenv("EMAIL_ORIGEM")
+SENHA_EMAIL = os.getenv("SENHA_EMAIL")
+EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
+
 bot = None
 
-# 🗂️ Pasta de comprovantes com caminho absoluto
-pasta_comprovantes = os.path.join(os.path.expanduser("~"), "Documents", "IAdoDjabo.py", "comprovantes")
+# 🗂️ Pasta de comprovantes
+pasta_comprovantes = os.path.join(os.getcwd(), "comprovantes")
 os.makedirs(pasta_comprovantes, exist_ok=True)
 
+# ✅ Usuários aprovados
 usuarios_aprovados = {}
 try:
     with open("aprovados.txt", "r") as f:
@@ -43,6 +51,32 @@ def salvar_aprovados():
             f.write(f"{username}|{chat_id}\n")
 
 
+# 📧 Função para envio de e-mail
+def enviar_email_comprovante(destinatario, assunto, corpo, arquivo_path):
+    mensagem = EmailMessage()
+    mensagem["From"] = EMAIL_ORIGEM
+    mensagem["To"] = destinatario
+    mensagem["Subject"] = assunto
+    mensagem.set_content(corpo)
+
+    with open(arquivo_path, "rb") as arquivo:
+        nome_arquivo = os.path.basename(arquivo_path)
+        mensagem.add_attachment(
+            arquivo.read(),
+            maintype="application",
+            subtype="octet-stream",
+            filename=nome_arquivo
+        )
+
+    contexto = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=contexto) as servidor:
+        servidor.login(EMAIL_ORIGEM, SENHA_EMAIL)
+        servidor.send_message(mensagem)
+
+    print("📨 E-mail enviado com sucesso!")
+
+
+# 🚀 Webhook PicPay
 flask_app = Flask(__name__)
 
 @flask_app.route('/webhook-picpay', methods=['POST'])
@@ -78,6 +112,7 @@ def webhook_picpay():
     return '', 200
 
 
+# 🧠 Comandos do bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔥 Mensal R$9,90 🔥", callback_data='plano_mensal')],
@@ -122,6 +157,7 @@ async def pegar_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Seu ID: {update.effective_user.id}")
 
 
+# 🧾 Receber comprovante
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
@@ -131,11 +167,8 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
         return
 
-    pasta = os.path.join(os.getcwd(), "comprovantes")
-    os.makedirs(pasta, exist_ok=True)
-
     agora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    nome_base = f"{pasta}/{username}_{agora}"
+    nome_base = f"{pasta_comprovantes}/{username}_{agora}"
 
     try:
         if update.message.photo:
@@ -148,9 +181,20 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_path = f"{nome_base}.pdf"
             await file.download_to_drive(file_path)
 
+        # 📨 Enviar e-mail após salvar
+        try:
+            enviar_email_comprovante(
+                destinatario=EMAIL_DESTINO,
+                assunto=f"📩 Novo comprovante de @{username}",
+                corpo=f"Comprovante enviado por @{username} (ID: {chat_id}) em {agora}.",
+                arquivo_path=file_path
+            )
+        except Exception as e:
+            print(f"❌ Erro ao enviar e-mail: {e}")
+
     except Exception as e:
         await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
-
+        return
 
     usuarios_aprovados[username] = chat_id
     salvar_aprovados()
@@ -224,11 +268,13 @@ async def definir_comandos(app):
     await app.bot.set_my_commands(comandos)
 
 
+# 🌐 Flask paralelo
 def start_flask():
     port = int(os.environ.get('PORT', 10000))
     flask_app.run(host='0.0.0.0', port=port)
 
 
+# 🚀 Inicializar
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=start_flask)
     flask_thread.daemon = True
