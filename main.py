@@ -132,11 +132,6 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     username = user.username or user.first_name
     chat_id = user.id
 
-    # >>>>> Verificação REMOVIDA: <<<<<
-    # if username in usuarios_aprovados:
-    #     await update.message.reply_text("✅ Você já foi aprovado!")
-    #     return
-
     if not (update.message.photo or update.message.document):
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
         print(f"[DEBUG] Usuário @{username} enviou algo diferente de imagem ou PDF.")
@@ -146,20 +141,48 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     nome_base = f"comprovantes/{username}_{agora}"
 
     try:
+        loop = asyncio.get_event_loop()
+
         if update.message.photo:
             print(f"[DEBUG] Recebi foto de @{username}.")
             file = await update.message.photo[-1].get_file()
-            await file.download_to_drive(f"{nome_base}.jpg")
-            print(f"[DEBUG] Foto salva como {nome_base}.jpg")
+            file_path = f"{nome_base}.jpg"
+            print(f"[DEBUG] Salvando foto em: {os.path.abspath(file_path)}")
+
+            await loop.run_in_executor(None, file.download, file_path)
+
+            print(f"[DEBUG] Foto salva como {file_path}")
+
         elif update.message.document:
             print(f"[DEBUG] Recebi documento de @{username}.")
             file = await update.message.document.get_file()
-            await file.download_to_drive(f"{nome_base}.pdf")
-            print(f"[DEBUG] Documento salvo como {nome_base}.pdf")
+            file_path = f"{nome_base}.pdf"
+            print(f"[DEBUG] Salvando documento em: {os.path.abspath(file_path)}")
+
+            await loop.run_in_executor(None, file.download, file_path)
+
+            print(f"[DEBUG] Documento salvo como {file_path}")
+
     except Exception as e:
         await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
         print(f"[DEBUG] Erro ao salvar arquivo: {e}")
         return
+
+    # Salva no dicionário e arquivo com chat_id
+    usuarios_aprovados[username] = chat_id
+    salvar_aprovados()
+    print(f"[DEBUG] @{username} e chat_id {chat_id} salvo no arquivo aprovados.txt.")
+
+    await update.message.reply_text("📩 Comprovante recebido! Aguarde confirmação do admin...")
+
+    try:
+        await context.bot.send_message(
+            chat_id=int(USUARIO_ADMIN),
+            text=f"📢 Novo comprovante enviado por @{username}.\nUse /liberar @{username} se estiver tudo certo!"
+        )
+        print(f"[DEBUG] Notificação enviada pro admin sobre @{username}.")
+    except Exception as e:
+        print(f"[DEBUG] Erro ao notificar admin: {e}")
 
     # Salva no dicionário e arquivo com chat_id
     usuarios_aprovados[username] = chat_id
