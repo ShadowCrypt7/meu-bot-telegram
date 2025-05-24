@@ -235,9 +235,11 @@ async def definir_comandos(app):
 
 # 🔃 Iniciar Flask em thread paralela
 def start_flask():
-    if __name__ == "__main__":
-        port = int(os.environ.get("PORT", 10000))  # pega a porta do ambiente ou usa 10000 como padrão
-        app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get('PORT', 10000))
+    print(f" * Servidor Flask rodando na porta {port}...")
+    print(f" * Use a URL pública do seu servidor para configurar o webhook PicPay (ex: https://seusite.com/webhook-picpay)")
+
+    flask_app.run(host='0.0.0.0', port=port)
 
 
 
