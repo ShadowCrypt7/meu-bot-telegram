@@ -26,7 +26,7 @@ bot = None
 # 🗂️ Pasta de comprovantes
 os.makedirs("comprovantes", exist_ok=True)
 
-# 🧠 Carrega usuários aprovados: dicionário {username: chat_id}
+# 🧠 Carrega usuários aprovados
 usuarios_aprovados = {}
 try:
     with open("aprovados.txt", "r") as f:
@@ -37,11 +37,12 @@ try:
 except FileNotFoundError:
     pass
 
-# 🔄 Salvar aprovados no arquivo
+
 def salvar_aprovados():
     with open("aprovados.txt", "w") as f:
         for username, chat_id in usuarios_aprovados.items():
             f.write(f"{username}|{chat_id}\n")
+
 
 # ------ Flask + Webhook PicPay ------
 flask_app = Flask(__name__)
@@ -57,10 +58,7 @@ def webhook_picpay():
     if status == 'paid' and referencia:
         username = referencia.lstrip("@")
         if username not in usuarios_aprovados:
-            # Se não temos chat_id, não adiciona ainda, só avisa no print
-            print(f"Pagamento recebido de @{username}, mas chat_id desconhecido. Aguarde o comprovante para salvar chat_id.")
-            # Opcional: você pode armazenar numa fila temporária pra liberar depois, se quiser
-
+            print(f"Pagamento recebido de @{username}, mas chat_id desconhecido.")
         else:
             chat_id = usuarios_aprovados.get(username)
             if bot and chat_id:
@@ -81,6 +79,7 @@ def webhook_picpay():
 
     return '', 200
 
+
 # ------ Funções do Bot ------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,6 +97,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
         reply_markup=markup
     )
+
 
 async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -123,8 +123,10 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.message.reply_text(msg, parse_mode="Markdown")
     await update.callback_query.message.reply_text(msg2, parse_mode="Markdown")
 
+
 async def pegar_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Seu ID: {update.effective_user.id}")
+
 
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -133,13 +135,10 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if not (update.message.photo or update.message.document):
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
-        print(f"[DEBUG] Usuário @{username} enviou algo diferente de imagem ou PDF.")
         return
 
-    # Confirma pasta
     pasta = "comprovantes"
     if not os.path.exists(pasta):
-        print(f"[DEBUG] Pasta {pasta} não existe, criando...")
         os.makedirs(pasta)
 
     agora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -147,40 +146,21 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         if update.message.photo:
-            print(f"[DEBUG] Recebi foto de @{username}.")
             file = await update.message.photo[-1].get_file()
             file_path = f"{nome_base}.jpg"
-            print(f"[DEBUG] Tentando salvar foto em: {os.path.abspath(file_path)}")
-
-            await file.download_to_drive(file_path)
-
-            print(f"[DEBUG] Foto salva como {file_path}")
+            await file.download_to_disk(file_path)
 
         elif update.message.document:
-            print(f"[DEBUG] Recebi documento de @{username}.")
             file = await update.message.document.get_file()
             file_path = f"{nome_base}.pdf"
-            print(f"[DEBUG] Tentando salvar documento em: {os.path.abspath(file_path)}")
-
-            await file.download_to_drive(file_path)
-
-            print(f"[DEBUG] Documento salvo como {file_path}")
+            await file.download_to_disk(file_path)
 
     except Exception as e:
         await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
-        print(f"[DEBUG] Erro ao salvar arquivo: {e}")
         return
 
-    # Confirmar que arquivo existe depois do download
-    if os.path.exists(file_path):
-        print(f"[DEBUG] Verificado: arquivo existe em {file_path}")
-    else:
-        print(f"[DEBUG] Alerta: arquivo NÃO encontrado em {file_path}")
-
-    # Salva no dicionário e arquivo com chat_id
     usuarios_aprovados[username] = chat_id
     salvar_aprovados()
-    print(f"[DEBUG] @{username} e chat_id {chat_id} salvo no arquivo aprovados.txt.")
 
     await update.message.reply_text("📩 Comprovante recebido! Aguarde confirmação do admin...")
 
@@ -189,9 +169,9 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat_id=int(USUARIO_ADMIN),
             text=f"📢 Novo comprovante enviado por @{username}.\nUse /liberar @{username} se estiver tudo certo!"
         )
-        print(f"[DEBUG] Notificação enviada pro admin sobre @{username}.")
     except Exception as e:
-        print(f"[DEBUG] Erro ao notificar admin: {e}")
+        print(f"Erro ao notificar admin: {e}")
+
 
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remetente_id = update.effective_user.id
@@ -217,7 +197,8 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text(f"⚠️ Erro ao notificar @{username}.\n{e}")
     else:
-        await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}. Provavelmente a pessoa não enviou nenhum comprovante ainda.")
+        await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}.")
+
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -225,6 +206,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Você já foi aprovado e tem acesso ao conteúdo!")
     else:
         await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!")
+
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -237,6 +219,7 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(texto, parse_mode="Markdown")
 
+
 # 🔧 Definir comandos do menu do bot
 async def definir_comandos(app):
     comandos = [
@@ -248,13 +231,12 @@ async def definir_comandos(app):
     ]
     await app.bot.set_my_commands(comandos)
 
+
 # 🔃 Iniciar Flask em thread paralela
 def start_flask():
     port = int(os.environ.get('PORT', 10000))
-    print(f" * Servidor Flask rodando na porta {port}...")
-    print(f" * Use a URL pública do seu servidor para configurar o webhook PicPay (ex: https://seusite.com/webhook-picpay)")
-
     flask_app.run(host='0.0.0.0', port=port)
+
 
 # 🚀 MAIN
 if __name__ == "__main__":
