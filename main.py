@@ -225,10 +225,13 @@ async def definir_comandos(app):
 
 # 🔃 Iniciar Flask em thread paralela
 def start_flask():
-    public_url = ngrok.connect(5000)
-    print(f" * ngrok tunnel \"{public_url}\" -> \"http://127.0.0.1:5000\"")
-    print(f" * Use essa URL no PicPay: {public_url}/webhook-picpay")
-    flask_app.run(port=5000)
+    port = int(os.environ.get('PORT', 10000))
+    print(f" * Servidor Flask rodando na porta {port}...")
+    print(f" * Use a URL pública do seu servidor para configurar o webhook PicPay (ex: https://seusite.com/webhook-picpay)")
+
+    flask_app.run(host='0.0.0.0', port=port)
+
+
 
 # 🚀 MAIN
 if __name__ == "__main__":
