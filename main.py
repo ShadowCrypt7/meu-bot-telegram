@@ -127,6 +127,10 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pegar_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Seu ID: {update.effective_user.id}")
 
+import os
+import asyncio
+import datetime
+
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
@@ -137,8 +141,14 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"[DEBUG] Usuário @{username} enviou algo diferente de imagem ou PDF.")
         return
 
+    # Confirma pasta
+    pasta = "comprovantes"
+    if not os.path.exists(pasta):
+        print(f"[DEBUG] Pasta {pasta} não existe, criando...")
+        os.makedirs(pasta)
+
     agora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    nome_base = f"comprovantes/{username}_{agora}"
+    nome_base = f"{pasta}/{username}_{agora}"
 
     try:
         loop = asyncio.get_event_loop()
@@ -147,8 +157,9 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             print(f"[DEBUG] Recebi foto de @{username}.")
             file = await update.message.photo[-1].get_file()
             file_path = f"{nome_base}.jpg"
-            print(f"[DEBUG] Salvando foto em: {os.path.abspath(file_path)}")
+            print(f"[DEBUG] Tentando salvar foto em: {os.path.abspath(file_path)}")
 
+            # download síncrono rodando em executor pra não travar
             await loop.run_in_executor(None, file.download, file_path)
 
             print(f"[DEBUG] Foto salva como {file_path}")
@@ -157,7 +168,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             print(f"[DEBUG] Recebi documento de @{username}.")
             file = await update.message.document.get_file()
             file_path = f"{nome_base}.pdf"
-            print(f"[DEBUG] Salvando documento em: {os.path.abspath(file_path)}")
+            print(f"[DEBUG] Tentando salvar documento em: {os.path.abspath(file_path)}")
 
             await loop.run_in_executor(None, file.download, file_path)
 
@@ -168,21 +179,11 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"[DEBUG] Erro ao salvar arquivo: {e}")
         return
 
-    # Salva no dicionário e arquivo com chat_id
-    usuarios_aprovados[username] = chat_id
-    salvar_aprovados()
-    print(f"[DEBUG] @{username} e chat_id {chat_id} salvo no arquivo aprovados.txt.")
-
-    await update.message.reply_text("📩 Comprovante recebido! Aguarde confirmação do admin...")
-
-    try:
-        await context.bot.send_message(
-            chat_id=int(USUARIO_ADMIN),
-            text=f"📢 Novo comprovante enviado por @{username}.\nUse /liberar @{username} se estiver tudo certo!"
-        )
-        print(f"[DEBUG] Notificação enviada pro admin sobre @{username}.")
-    except Exception as e:
-        print(f"[DEBUG] Erro ao notificar admin: {e}")
+    # Confirmar que arquivo existe depois do download
+    if os.path.exists(file_path):
+        print(f"[DEBUG] Verificado: arquivo existe em {file_path}")
+    else:
+        print(f"[DEBUG] Alerta: arquivo NÃO encontrado em {file_path}")
 
     # Salva no dicionário e arquivo com chat_id
     usuarios_aprovados[username] = chat_id
@@ -199,6 +200,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"[DEBUG] Notificação enviada pro admin sobre @{username}.")
     except Exception as e:
         print(f"[DEBUG] Erro ao notificar admin: {e}")
+
 
 
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
