@@ -6,7 +6,6 @@ import asyncio
 from dotenv import load_dotenv
 from flask import Flask, request
 
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
@@ -127,10 +126,6 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pegar_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Seu ID: {update.effective_user.id}")
 
-import os
-import asyncio
-import datetime
-
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
@@ -151,16 +146,13 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     nome_base = f"{pasta}/{username}_{agora}"
 
     try:
-        loop = asyncio.get_event_loop()
-
         if update.message.photo:
             print(f"[DEBUG] Recebi foto de @{username}.")
             file = await update.message.photo[-1].get_file()
             file_path = f"{nome_base}.jpg"
             print(f"[DEBUG] Tentando salvar foto em: {os.path.abspath(file_path)}")
 
-            # download síncrono rodando em executor pra não travar
-            await loop.run_in_executor(None, file.download, file_path)
+            await file.download_to_drive(file_path)
 
             print(f"[DEBUG] Foto salva como {file_path}")
 
@@ -170,7 +162,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_path = f"{nome_base}.pdf"
             print(f"[DEBUG] Tentando salvar documento em: {os.path.abspath(file_path)}")
 
-            await loop.run_in_executor(None, file.download, file_path)
+            await file.download_to_drive(file_path)
 
             print(f"[DEBUG] Documento salvo como {file_path}")
 
@@ -200,8 +192,6 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"[DEBUG] Notificação enviada pro admin sobre @{username}.")
     except Exception as e:
         print(f"[DEBUG] Erro ao notificar admin: {e}")
-
-
 
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remetente_id = update.effective_user.id
@@ -265,8 +255,6 @@ def start_flask():
     print(f" * Use a URL pública do seu servidor para configurar o webhook PicPay (ex: https://seusite.com/webhook-picpay)")
 
     flask_app.run(host='0.0.0.0', port=port)
-
-
 
 # 🚀 MAIN
 if __name__ == "__main__":
