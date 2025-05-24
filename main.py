@@ -289,4 +289,4 @@ if __name__ == "__main__":
     app.post_init = lambda app: definir_comandos(app)
 
     print("BOT RODANDO 🔥")
-    #app.run_polling()
+    app.run_polling()
