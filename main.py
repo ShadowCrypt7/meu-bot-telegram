@@ -5,7 +5,7 @@ import asyncio
 
 from dotenv import load_dotenv
 from flask import Flask, request
-from pyngrok import ngrok
+
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
