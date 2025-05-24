@@ -177,7 +177,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         print(f"[DEBUG] Erro ao notificar admin: {e}")
 
-        
+
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remetente_id = update.effective_user.id
 
@@ -264,4 +264,4 @@ if __name__ == "__main__":
     app.post_init = lambda app: definir_comandos(app)
 
     print("BOT RODANDO 🔥")
-    app.run_polling()
+    #app.run_polling()
