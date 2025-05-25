@@ -1,13 +1,12 @@
 import os
 import datetime
-import threading
 import asyncio
-import smtplib
 import ssl
+import smtplib
 from email.message import EmailMessage
 
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, abort
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -16,8 +15,8 @@ from telegram.ext import (
     filters, ContextTypes
 )
 
-# 🔑 Carregar variáveis do .env
 load_dotenv()
+
 TOKEN = os.getenv("BOT_TOKEN")
 LINK_SUPORTE = os.getenv("LINK_SUPORTE")
 GRUPO_EXCLUSIVO = os.getenv("GRUPO_EXCLUSIVO")
@@ -27,92 +26,44 @@ EMAIL_ORIGEM = os.getenv("EMAIL_ORIGEM")
 SENHA_EMAIL = os.getenv("SENHA_EMAIL")
 EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
 
-bot = None
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# 🗂️ Pasta de comprovantes
+bot = None
+usuarios_aprovados = {}
+
 pasta_comprovantes = os.path.join(os.getcwd(), "comprovantes")
 os.makedirs(pasta_comprovantes, exist_ok=True)
 
-# ✅ Usuários aprovados
-usuarios_aprovados = {}
+# Ler aprovados
 try:
     with open("aprovados.txt", "r") as f:
         for linha in f:
-            partes = linha.strip().split("|")
-            if len(partes) == 2:
-                usuarios_aprovados[partes[0]] = int(partes[1])
+            u, cid = linha.strip().split("|")
+            usuarios_aprovados[u] = int(cid)
 except FileNotFoundError:
     pass
 
-
 def salvar_aprovados():
     with open("aprovados.txt", "w") as f:
-        for username, chat_id in usuarios_aprovados.items():
-            f.write(f"{username}|{chat_id}\n")
+        for u, cid in usuarios_aprovados.items():
+            f.write(f"{u}|{cid}\n")
 
+def enviar_email_comprovante(dest, assunto, corpo, arquivo_path):
+    msg = EmailMessage()
+    msg["From"] = EMAIL_ORIGEM
+    msg["To"] = dest
+    msg["Subject"] = assunto
+    msg.set_content(corpo)
 
-# 📧 Função para envio de e-mail
-def enviar_email_comprovante(destinatario, assunto, corpo, arquivo_path):
-    mensagem = EmailMessage()
-    mensagem["From"] = EMAIL_ORIGEM
-    mensagem["To"] = destinatario
-    mensagem["Subject"] = assunto
-    mensagem.set_content(corpo)
-
-    with open(arquivo_path, "rb") as arquivo:
-        nome_arquivo = os.path.basename(arquivo_path)
-        mensagem.add_attachment(
-            arquivo.read(),
-            maintype="application",
-            subtype="octet-stream",
-            filename=nome_arquivo
-        )
+    with open(arquivo_path, "rb") as arq:
+        nome_arq = os.path.basename(arquivo_path)
+        msg.add_attachment(arq.read(), maintype="application", subtype="octet-stream", filename=nome_arq)
 
     contexto = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=contexto) as servidor:
         servidor.login(EMAIL_ORIGEM, SENHA_EMAIL)
-        servidor.send_message(mensagem)
+        servidor.send_message(msg)
 
-    print("📨 E-mail enviado com sucesso!")
-
-
-# 🚀 Webhook PicPay
-flask_app = Flask(__name__)
-
-@flask_app.route('/webhook-picpay', methods=['POST'])
-def webhook_picpay():
-    data = request.json
-    print("Webhook PicPay recebido:", data)
-
-    status = data.get('status')
-    referencia = data.get('referenceId')
-
-    if status == 'paid' and referencia:
-        username = referencia.lstrip("@")
-        if username not in usuarios_aprovados:
-            print(f"Pagamento recebido de @{username}, mas chat_id desconhecido.")
-        else:
-            chat_id = usuarios_aprovados.get(username)
-            if bot and chat_id:
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        bot.send_message(
-                            chat_id=chat_id,
-                            text=f"✅ Pagamento confirmado automaticamente!\nBem-vindo ao clube dos insanos 🔥\nAcesse o grupo aqui: {GRUPO_EXCLUSIVO}"
-                        ),
-                        loop=bot.loop
-                    )
-                except Exception as e:
-                    print(f"Erro ao enviar mensagem pra @{username}: {e}")
-            else:
-                print("Bot não iniciado ou chat_id não disponível.")
-    else:
-        print(f"Webhook ignorado: status '{status}' ou referência inválida.")
-
-    return '', 200
-
-
-# 🧠 Comandos do bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔥 Mensal R$9,90 🔥", callback_data='plano_mensal')],
@@ -122,13 +73,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     markup = InlineKeyboardMarkup(keyboard)
 
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
+    await update.message.reply_photo(
         photo="https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png",
         caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
         reply_markup=markup
     )
-
 
 async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -146,18 +95,14 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ *Envio Imediato!* (Após pagamento)\n"
         "🔑 Chave Pix: `055.336.041-89`\n\n"
     )
-
     msg2 = "Deu certo amor? Envie o comprovante aqui pra liberar seu conteúdo! 🙈🔥"
 
     await update.callback_query.message.reply_text(msg, parse_mode="Markdown")
     await update.callback_query.message.reply_text(msg2, parse_mode="Markdown")
 
-
 async def pegar_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Seu ID: {update.effective_user.id}")
 
-
-# 🧾 Receber comprovante
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
@@ -175,25 +120,19 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             file = await update.message.photo[-1].get_file()
             file_path = f"{nome_base}.jpg"
             await file.download_to_drive(file_path)
-
         elif update.message.document:
             file = await update.message.document.get_file()
             file_path = f"{nome_base}.pdf"
             await file.download_to_drive(file_path)
 
-        # 📨 Enviar e-mail após salvar
-        try:
-            enviar_email_comprovante(
-                destinatario=EMAIL_DESTINO,
-                assunto=f"📩 Novo comprovante de @{username}",
-                corpo=f"Comprovante enviado por @{username} (ID: {chat_id}) em {agora}.",
-                arquivo_path=file_path
-            )
-        except Exception as e:
-            print(f"❌ Erro ao enviar e-mail: {e}")
-
+        enviar_email_comprovante(
+            EMAIL_DESTINO,
+            f"📩 Novo comprovante de @{username}",
+            f"Comprovante enviado por @{username} (ID: {chat_id}) em {agora}.",
+            file_path
+        )
     except Exception as e:
-        await update.message.reply_text(f"❌ Falha ao salvar comprovante. Erro: {e}")
+        await update.message.reply_text(f"❌ Falha ao salvar ou enviar comprovante. Erro: {e}")
         return
 
     usuarios_aprovados[username] = chat_id
@@ -209,12 +148,9 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         print(f"Erro ao notificar admin: {e}")
 
-
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    remetente_id = update.effective_user.id
-
-    if str(remetente_id) != USUARIO_ADMIN:
-        await update.message.reply_text("🚫 Você não tem permissão pra isso.")
+    if str(update.effective_user.id) != USUARIO_ADMIN:
+        await update.message.reply_text("🚫 Você não tem permissão para isso.")
         return
 
     if not context.args:
@@ -232,10 +168,9 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(f"✅ @{username} liberado com sucesso!")
         except Exception as e:
-            await update.message.reply_text(f"⚠️ Erro ao notificar @{username}.\n{e}")
+            await update.message.reply_text(f"⚠️ Erro ao notificar @{username}: {e}")
     else:
         await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}.")
-
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -243,7 +178,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Você já foi aprovado e tem acesso ao conteúdo!")
     else:
         await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!")
-
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -256,7 +190,6 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(texto, parse_mode="Markdown")
 
-
 async def definir_comandos(app):
     comandos = [
         BotCommand("start", "Ver planos disponíveis"),
@@ -267,18 +200,20 @@ async def definir_comandos(app):
     ]
     await app.bot.set_my_commands(comandos)
 
+flask_app = Flask(__name__)
+app = None
 
-# 🌐 Flask paralelo
-def start_flask():
-    port = int(os.environ.get('PORT', 10000))
-    flask_app.run(host='0.0.0.0', port=port)
+@flask_app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), bot)
+        asyncio.run_coroutine_threadsafe(app.update_queue.put(update), app.loop)
+        return '', 200
+    else:
+        abort(405)
 
-
-# 🚀 Inicializar
-if __name__ == "__main__":
-    flask_thread = threading.Thread(target=start_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+async def main():
+    global app, bot
 
     app = ApplicationBuilder().token(TOKEN).build()
     bot = app.bot
@@ -292,7 +227,23 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(handle_planos))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.PDF, receber_comprovante))
 
-    app.post_init = lambda app: definir_comandos(app)
+    app.post_init = definir_comandos
 
-    print("BOT RODANDO 🔥")
-    app.run_polling()
+    # Define webhook no Telegram
+    await bot.set_webhook(WEBHOOK_URL)
+    print(f"Webhook definido: {WEBHOOK_URL}")
+
+    # Inicia Flask em thread separada para receber updates
+    import threading
+    thread = threading.Thread(target=lambda: flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))))
+    thread.daemon = True
+    thread.start()
+
+    print("Bot rodando via webhook no Render...")
+
+    await app.initialize()
+    await app.start()
+    await app.updater.idle()  # Somente idle sem polling
+
+if __name__ == "__main__":
+    asyncio.run(main())
