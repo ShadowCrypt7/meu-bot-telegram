@@ -202,18 +202,21 @@ async def definir_comandos(app):
 
 flask_app = Flask(__name__)
 app = None
+loop = None
 
 @flask_app.route('/webhook', methods=['POST'])
 def webhook():
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), bot)
-        asyncio.run_coroutine_threadsafe(app.update_queue.put(update), app.loop)
+        asyncio.run_coroutine_threadsafe(app.update_queue.put(update), loop)
         return '', 200
     else:
         abort(405)
 
 async def main():
-    global app, bot
+    global app, bot, loop
+
+    loop = asyncio.get_running_loop()
 
     app = ApplicationBuilder().token(TOKEN).build()
     bot = app.bot
@@ -229,21 +232,17 @@ async def main():
 
     app.post_init = definir_comandos
 
-    # Define webhook no Telegram
     await bot.set_webhook(WEBHOOK_URL)
     print(f"Webhook definido: {WEBHOOK_URL}")
 
-    # Inicia Flask em thread separada para receber updates
     import threading
     thread = threading.Thread(target=lambda: flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))))
     thread.daemon = True
     thread.start()
 
-    print("Bot rodando via webhook no Render...")
-
     await app.initialize()
     await app.start()
-    await app.updater.idle()  # Somente idle sem polling
+    await asyncio.Event().wait()  # Mantém o bot rodando sem polling
 
 if __name__ == "__main__":
     asyncio.run(main())
