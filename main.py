@@ -199,6 +199,7 @@ async def definir_comandos(app):
         BotCommand("liberar", "Admin: liberar acesso de um usuário")
     ]
     await app.bot.set_my_commands(comandos)
+    bot.set_my_commands(comandos)
 
 flask_app = Flask(__name__)
 app = None
