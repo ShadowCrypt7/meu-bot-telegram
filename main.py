@@ -1,5 +1,4 @@
 import os
-import datetime
 import asyncio
 import ssl
 import smtplib
@@ -114,7 +113,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
         return
 
-    agora = datetime.datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d_%H-%M-%S")
+    agora = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d_%H-%M-%S")
     nome_base = f"{pasta_comprovantes}/{username}_{agora}"
 
     try:
