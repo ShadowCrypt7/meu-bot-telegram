@@ -2,6 +2,7 @@ import os
 import asyncio
 import ssl
 import smtplib
+from pathlib import Path
 from email.message import EmailMessage
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -67,15 +68,14 @@ def enviar_email_comprovante(dest, assunto, corpo, arquivo_path):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("🔥 Mensal R$9,90 🔥", callback_data='plano_mensal')],
-        [InlineKeyboardButton("😈 3 Meses R$19,90 😈", callback_data='plano_trimestral')],
-        [InlineKeyboardButton("👑 Permanente R$49,90 👑", callback_data='plano_vitalicio')],
+        [InlineKeyboardButton("🔥 Mensal Básico - R$19,99 🔥", callback_data='plano_mensal_basico')],
+        [InlineKeyboardButton("😈 Mensal R$39,99 😈", callback_data='plano_mensal_premium')],
         [InlineKeyboardButton("📞 Suporte", url=LINK_SUPORTE)]
     ]
     markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_photo(
-        photo="https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png",
+        photo=Path("C:/Users/Rodrigo/Documents/IAdoDjabo.py/fotos/GABI_PIJAMA.jpeg"),
         caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
         reply_markup=markup
     )
@@ -85,9 +85,8 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plano = update.callback_query.data
 
     textos = {
-        "plano_mensal": "*Plano Mensal* - R$ 9,90\n55+ vídeos & 100+ fotos\n\n🔥 Eu sei o que você quer… e vou te dar 😮‍💨🙈",
-        "plano_trimestral": "*Plano Trimestral* - R$ 19,90\n100+ vídeos & 350+ fotos\n\n🔥 Prepare-se pra perder o controle… 🤤🔥",
-        "plano_vitalicio": "*Plano Vitalício* - R$ 49,90\n450+ vídeos & 800+ fotos + conteúdo novo todo dia!\n\n👑 Acesso total, meu WhatsApp pessoal e muito mais… 😈"
+        "plano_mensal_basico": "*Plano Mensal* - R$ 19,99\nPlano Mensal com mais de 100 fotos e vídeos\n\n🔥 Eu sei o que você quer… e vou te dar 😮‍💨🙈",
+        "plano_mensal_premium": "*Plano Trimestral* - R$ 39,99\nPlano Mensal com mais de 100 fotos e vídeos\nAcesso vitalício ao Grupo VIP com novos conteúdos todo dia 🤤\nMeu número pessoal para ter ligações de vídeo diretamente comigo...😈\n\n🔥 Prepare-se pra perder o controle… 🤤🔥",
     }
 
     texto = textos.get(plano, "Plano inválido.")
@@ -96,7 +95,7 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ *Envio Imediato!* (Após pagamento)\n"
         "🔑 Chave Pix: `055.336.041-89`\n\n"
     )
-    msg2 = "Deu certo amor? Envie o comprovante aqui pra liberar seu conteúdo! 🙈🔥"
+    msg2 = "Deu certo amor? Envie o comprovante aqui pra liberar o link do seu conteúdo! 🙈🔥"
 
     await update.callback_query.message.reply_text(msg, parse_mode="Markdown")
     await update.callback_query.message.reply_text(msg2, parse_mode="Markdown")
