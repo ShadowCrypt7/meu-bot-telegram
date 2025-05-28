@@ -4,6 +4,8 @@ import asyncio
 import ssl
 import smtplib
 from email.message import EmailMessage
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from flask import Flask, request, abort
@@ -112,7 +114,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Envie uma imagem ou PDF do comprovante.")
         return
 
-    agora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    agora = datetime.datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d_%H-%M-%S")
     nome_base = f"{pasta_comprovantes}/{username}_{agora}"
 
     try:
