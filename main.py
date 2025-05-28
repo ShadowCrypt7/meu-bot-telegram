@@ -73,12 +73,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📞 Suporte", url=LINK_SUPORTE)]
     ]
     markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_photo(
-        photo=Path("C:/Users/Rodrigo/Documents/IAdoDjabo.py/fotos/GABI_PIJAMA.jpeg"),
-        caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
-        reply_markup=markup
-    )
+    with open("fotos/GABI_PIJAMA.jpeg", "rb") as foto:
+        await update.message.reply_photo(
+            photo=foto,
+            caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
+            reply_markup=markup
+        )
 
 async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
