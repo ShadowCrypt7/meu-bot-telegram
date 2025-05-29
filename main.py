@@ -40,7 +40,7 @@ os.makedirs(pasta_comprovantes, exist_ok=True)
 try:
     with open("aprovados.txt", "r") as f:
         for linha in f:
-            u, cid = linha.strip().split("|")
+            u, cid = linha.strip().split(" | ")
             usuarios_aprovados[u] = int(cid)
 except FileNotFoundError:
     pass
