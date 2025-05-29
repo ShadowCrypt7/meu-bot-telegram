@@ -245,5 +245,6 @@ async def main():
     await app.start()
     await asyncio.Event().wait()  # Mantém o bot rodando sem polling
 
+
 if __name__ == "__main__":
     asyncio.run(main())
