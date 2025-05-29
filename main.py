@@ -40,10 +40,15 @@ os.makedirs(pasta_comprovantes, exist_ok=True)
 try:
     with open("aprovados.txt", "r") as f:
         for linha in f:
-            u, cid = linha.strip().split(" | ")
-            usuarios_aprovados[u] = int(cid)
+            partes = linha.strip().split(" | ")
+            if len(partes) == 2:
+                u, cid = partes
+                usuarios_aprovados[u] = int(cid)
+            else:
+                print(f"[AVISO] Linha ignorada (formato inválido): {linha.strip()}")
 except FileNotFoundError:
     pass
+
 
 def salvar_aprovados():
     with open("aprovados.txt", "w") as f:
