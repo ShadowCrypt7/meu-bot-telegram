@@ -181,6 +181,9 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     if username in usuarios_aprovados:
         await update.message.reply_text("✅ Você já foi aprovado e tem acesso ao conteúdo!")
+        await context.bot.send_message(
+            text=f"Acesse o grupo aqui: {GRUPO_EXCLUSIVO}"
+        )
     else:
         await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!")
 
