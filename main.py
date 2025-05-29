@@ -69,7 +69,7 @@ def enviar_email_comprovante(dest, assunto, corpo, arquivo_path):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔥 Mensal Básico - R$19,99 🔥", callback_data='plano_mensal_basico')],
-        [InlineKeyboardButton("😈 Mensal R$39,99 😈", callback_data='plano_mensal_premium')],
+        [InlineKeyboardButton("😈 Mensal Premium R$39,99 😈", callback_data='plano_mensal_premium')],
         [InlineKeyboardButton("📞 Suporte", url=LINK_SUPORTE)]
     ]
     markup = InlineKeyboardMarkup(keyboard)
@@ -85,8 +85,8 @@ async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plano = update.callback_query.data
 
     textos = {
-        "plano_mensal_basico": "*Plano Mensal* - R$ 19,99\nPlano Mensal com mais de 100 fotos e vídeos\n\n🔥 Eu sei o que você quer… e vou te dar 😮‍💨🙈",
-        "plano_mensal_premium": "*Plano Trimestral* - R$ 39,99\nPlano Mensal com mais de 100 fotos e vídeos\nAcesso vitalício ao Grupo VIP com novos conteúdos todo dia 🤤\nMeu número pessoal para ter ligações de vídeo diretamente comigo...😈\n\n🔥 Prepare-se pra perder o controle… 🤤🔥",
+        "plano_mensal_basico": "*Plano Mensal Básico* - R$ 19,99\n\nPlano Mensal com mais de 100 fotos e vídeos\n\n🔥 Eu sei o que você quer… e vou te dar 😮‍💨🙈",
+        "plano_mensal_premium": "*Plano Mensal Premium* - R$ 39,99\n\nPlano Mensal com mais de 100 fotos e vídeos\nAcesso vitalício ao Grupo VIP com novos conteúdos todo dia 🤤\nMeu número pessoal para ter ligações de vídeo diretamente comigo...😈\n\n🔥 Prepare-se pra perder o controle… 🤤🔥",
     }
 
     texto = textos.get(plano, "Plano inválido.")
