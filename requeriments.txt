@@ -1,5 +1,3 @@
-python-telegram-bot==20.5
-Flask==2.3.2
-python-dotenv==1.0.0
-pytz==2023.3  # se quiser suporte mais amplo para fuso horário, mas pode ser opcional
-zoneinfo; python_version < '3.9'
+python-telegram-bot==20.3
+Flask==2.3.3
+python-dotenv==1.0.1
