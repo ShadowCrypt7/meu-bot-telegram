@@ -2,6 +2,7 @@ import os
 import asyncio
 import ssl
 import smtplib
+import requests
 from pathlib import Path
 from email.message import EmailMessage
 from datetime import datetime
@@ -48,7 +49,6 @@ try:
                 print(f"[AVISO] Linha ignorada (formato inválido): {linha.strip()}")
 except FileNotFoundError:
     pass
-
 
 def salvar_aprovados():
     with open("aprovados.txt", "w") as f:
@@ -153,6 +153,22 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         print(f"Erro ao notificar admin: {e}")
 
+    #adiciona o usuario e ID no painel WEB
+def cadastrar_no_painel(username, chat_id):
+    url = f"{os.getenv('API_PAINEL_URL')}/api/adicionar"
+    try:
+        response = requests.post(url, json={
+            "username": username,
+            "chat_id": chat_id,
+            "chave_secreta": os.getenv("CHAVE_PAINEL") # 🔑 Chave para autenticação
+        })
+        if response.status_code == 200:
+            print(f"[API] Usuário @{username} cadastrado no painel com sucesso.")
+        else:
+            print(f"[API] Erro ao cadastrar @{username} no painel: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"[API] Erro na conexão com o painel: {e}")    
+
 async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_user.id) != USUARIO_ADMIN:
         await update.message.reply_text("🚫 Você não tem permissão para isso.")
@@ -169,9 +185,10 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"✅ Pagamento confirmado!\nBem-vindo ao clube dos insanos 🔥\nAcesse o grupo aqui: {GRUPO_EXCLUSIVO}"
+                text=f"✅ Pagamento confirmado!\nBem-vindo ao grupo VIP 🔥\nAcesse o conteúdo aqui: {GRUPO_EXCLUSIVO}"
             )
             await update.message.reply_text(f"✅ @{username} liberado com sucesso!")
+            cadastrar_no_painel(username, chat_id)  # ✅ Adiciona no painel
         except Exception as e:
             await update.message.reply_text(f"⚠️ Erro ao notificar @{username}: {e}")
     else:
@@ -180,7 +197,7 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     if username in usuarios_aprovados:
-        await update.message.reply_text(f"✅ Você já foi aprovado e tem acesso ao conteúdo!\n\n Acesse o grupo aqui: {GRUPO_EXCLUSIVO}")
+        await update.message.reply_text(f"✅ Você já foi aprovado e tem acesso ao conteúdo!\n\n 🔥Acesse o conteúdo aqui: {GRUPO_EXCLUSIVO}")
     else:
         await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!\n\n 🔑 Chave Pix: `055.336.041-89`")
 
