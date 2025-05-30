@@ -180,12 +180,9 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     if username in usuarios_aprovados:
-        await update.message.reply_text("✅ Você já foi aprovado e tem acesso ao conteúdo!")
-        await context.bot.send_message(
-            text=f"Acesse o grupo aqui: {GRUPO_EXCLUSIVO}"
-        )
+        await update.message.reply_text(f"✅ Você já foi aprovado e tem acesso ao conteúdo!\n\n Acesse o grupo aqui: {GRUPO_EXCLUSIVO}")
     else:
-        await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!")
+        await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!\n\n 🔑 Chave Pix: `055.336.041-89`")
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -203,11 +200,12 @@ async def definir_comandos(app):
         BotCommand("start", "Ver planos disponíveis"),
         BotCommand("planos", "Ver os planos novamente"),
         BotCommand("status", "Verificar se já foi aprovado"),
+        BotCommand("meuid", "Verifica qual o seu ID"),
         BotCommand("ajuda", "Explica como funciona o bot"),
         BotCommand("liberar", "Admin: liberar acesso de um usuário")
     ]
-    await app.bot.set_my_commands(comandos)
-    bot.set_my_commands(comandos)
+    
+    await bot.set_my_commands(comandos)
 
 flask_app = Flask(__name__)
 app = None
@@ -218,6 +216,7 @@ def webhook():
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), bot)
         asyncio.run_coroutine_threadsafe(app.update_queue.put(update), loop)
+        print(f"METODO /POST FUNCIONANDO!") # tentativa falha de log
         return '', 200
     else:
         abort(405)
@@ -256,3 +255,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    
