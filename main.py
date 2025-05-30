@@ -196,8 +196,10 @@ async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
+    chat_id = update._effective_chat.id
     if username in usuarios_aprovados:
         await update.message.reply_text(f"✅ Você já foi aprovado e tem acesso ao conteúdo!\n\n 🔥Acesse o conteúdo aqui: {GRUPO_EXCLUSIVO}")
+        cadastrar_no_painel(username, chat_id)  # ✅ Adiciona no painel
     else:
         await update.message.reply_text("⏳ Seu pagamento ainda não foi aprovado. Envie o comprovante se não tiver enviado ainda!\n\n 🔑 Chave Pix: `055.336.041-89`")
 
