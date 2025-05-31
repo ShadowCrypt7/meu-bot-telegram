@@ -9,7 +9,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from flask import Flask, request, abort
+from flask import Flask, jsonify, request, abort
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -28,6 +28,7 @@ CALLBACK_URL = os.getenv("CALLBACK_URL")
 
 API_PAINEL_URL = os.getenv("API_PAINEL_URL")
 CHAVE_PAINEL = os.getenv("CHAVE_PAINEL")
+CHAVE_SECRETA_BOT_INTERNA = os.getenv("CHAVE_PAINEL")
 
 SECRET_KEY_PAINEL = os.getenv("SECRET_KEY_PAINEL")
 USUARIO_PAINEL = os.getenv("USUARIO_PAINEL")
@@ -342,6 +343,56 @@ async def definir_comandos(app):
 flask_app = Flask(__name__)
 app = None
 loop = None
+
+# ... outras importações e definições ...
+
+# CHAVE_PAINEL já deve estar definida no seu .env e carregada no início do script
+# Esta é a chave que o PAINEL usará para se autenticar com o BOT nesta rota interna 
+
+@flask_app.route('/api/bot/notificar_aprovacao', methods=['POST'])
+def rota_notificar_aprovacao():
+    global app # Acesso à instância da Application do python-telegram-bot
+    global loop # Acesso ao loop asyncio principal do bot
+
+    if not app or not loop:
+        print("ERRO INTERNO: Instância do bot (app) ou loop não disponível para notificar_aprovacao.")
+        return jsonify({"status": "erro", "mensagem": "Erro interno do bot"}), 500
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "erro", "mensagem": "Requisição sem JSON"}), 400
+
+        # Verificação de segurança simples com a chave compartilhada
+        if data.get("chave_secreta_interna") != CHAVE_SECRETA_BOT_INTERNA:
+            print(f"Falha na autenticação para /api/bot/notificar_aprovacao. Chave recebida: {data.get('chave_secreta_interna')}")
+            return jsonify({"status": "erro", "mensagem": "Não autorizado - Chave interna inválida"}), 403
+
+        chat_id_usuario = data.get("chat_id")
+        link_conteudo = data.get("link_conteudo")
+        nome_plano = data.get("nome_plano", "seu plano") # Pega o nome do plano, se enviado
+
+        if not chat_id_usuario or not link_conteudo:
+            return jsonify({"status": "erro", "mensagem": "Dados incompletos: chat_id e link_conteudo são obrigatórios"}), 400
+
+        mensagem_para_usuario = (
+            f"🎉 Pagamento confirmado e acesso liberado!\n\n"
+            f"Bem-vindo(a) ao {nome_plano}! 🔥\n"
+            f"Acesse seu conteúdo exclusivo aqui: {link_conteudo}"
+        )
+
+        # Enviando a mensagem para o usuário através do bot
+        # Usamos run_coroutine_threadsafe porque esta rota Flask roda em uma thread separada
+        # do loop asyncio principal do bot.
+        coro = app.bot.send_message(chat_id=int(chat_id_usuario), text=mensagem_para_usuario)
+        asyncio.run_coroutine_threadsafe(coro, loop)
+
+        print(f"Notificação de aprovação enviada para chat_id: {chat_id_usuario}")
+        return jsonify({"status": "sucesso", "mensagem": "Notificação de aprovação agendada para envio."}), 200
+
+    except Exception as e:
+        print(f"Erro na rota /api/bot/notificar_aprovacao: {e}")
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 @flask_app.route('/webhook', methods=['POST'])
 def webhook():
