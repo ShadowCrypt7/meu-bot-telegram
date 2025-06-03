@@ -80,45 +80,123 @@ def enviar_email_comprovante(dest, assunto, corpo, arquivo_path):
         servidor.login(EMAIL_ORIGEM, SENHA_EMAIL)
         servidor.send_message(msg)
 
+# (Verifique se API_PAINEL_URL e CHAVE_PAINEL estão carregadas do .env)
+# A API /api/bot/planos que fizemos não exige chave, mas se exigisse, você a enviaria nos headers.
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔥 Mensal Básico - R$19,99 🔥", callback_data='plano_mensal_basico')],
-        [InlineKeyboardButton("😈 Mensal Premium R$39,99 😈", callback_data='plano_mensal_premium')],
-        [InlineKeyboardButton("📞 Suporte", url=LINK_SUPORTE)]
-    ]
+    # Limpar escolhas anteriores de plano para este usuário, caso existam
+    if 'plano_selecionado_id' in context.user_data:
+        del context.user_data['plano_selecionado_id']
+    if 'plano_selecionado_nome' in context.user_data:
+        del context.user_data['plano_selecionado_nome']
+
+    api_url_get_planos = f"{API_PAINEL_URL}/api/bot/planos"
+    keyboard = []
+    fetched_plans_data = {} # Para armazenar detalhes dos planos para handle_planos
+
+    try:
+        print(f"Buscando planos da API: {api_url_get_planos}")
+        response = requests.get(api_url_get_planos, timeout=10) # Adicionado timeout
+        response.raise_for_status() # Levanta erro para status 4xx/5xx
+        
+        data = response.json()
+        if data.get("status") == "sucesso" and data.get("planos"):
+            planos_da_api = data["planos"]
+            if planos_da_api:
+                for plano_api in planos_da_api:
+                    # Guardamos os detalhes completos do plano no bot_data para acesso rápido
+                    # Usamos id_plano como chave
+                    fetched_plans_data[plano_api['id_plano']] = plano_api
+                    
+                    # Cria o botão
+                    # Usamos nome_exibicao e preco para o texto do botão
+                    # (Você pode ajustar o formato do preço se quiser)
+                    texto_botao = f"{plano_api['nome_exibicao']} - R${plano_api['preco']:.2f}"
+                    keyboard.append([InlineKeyboardButton(texto_botao, callback_data=plano_api['id_plano'])])
+                
+                # Armazena os dados dos planos buscados no contexto do bot para uso em handle_planos
+                # Isso evita chamar a API novamente em handle_planos, mas o ideal seria um cache melhor
+                # ou buscar em handle_planos se não encontrar aqui.
+                # Por simplicidade, vamos armazenar em bot_data.
+                # ATENÇÃO: context.bot_data é compartilhado entre todos os usuários.
+                # Se os planos mudam raramente, isso é OK. Se mudam muito, buscar sempre ou usar um cache
+                # com tempo de expiração seria melhor.
+                context.bot_data['planos_detalhados_api'] = fetched_plans_data
+
+            else: # Nenhum plano ativo retornado pela API
+                await update.message.reply_text("😕 Desculpe, não há planos disponíveis no momento. Tente mais tarde.")
+                return
+        else: # API não retornou sucesso ou não retornou planos
+            print(f"API de planos não retornou sucesso ou planos: {data}")
+            await update.message.reply_text("😕 Não consegui carregar os planos no momento. Tente mais tarde.")
+            return
+
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao buscar planos da API: {e}")
+        await update.message.reply_text("😕 Ops! Tive um problema para buscar os planos. Por favor, tente novamente em alguns instantes.")
+        return
+    except Exception as e_geral: # Pega outros erros como JSONDecodeError se a resposta não for JSON
+        print(f"Erro geral ao processar planos da API: {e_geral}")
+        await update.message.reply_text("😕 Ops! Erro ao processar os planos. Por favor, tente novamente em alguns instantes.")
+        return
+
+    # Adiciona o botão de suporte se houver planos
+    if keyboard:
+        keyboard.append([InlineKeyboardButton("📞 Suporte", url=LINK_SUPORTE)])
+    else: # Caso o try/except falhe de uma forma que keyboard fique vazio
+        await update.message.reply_text("Não há planos para exibir ou ocorreu um erro. Contate o suporte.")
+        return
+
     markup = InlineKeyboardMarkup(keyboard)
-    with open("fotos/GABI_PIJAMA.jpeg", "rb") as foto:
-        await update.message.reply_photo(
-            photo=foto,
-            caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
+    
+    # Enviar foto e caption
+    # Você precisa garantir que a foto "fotos/GABI_PIJAMA.jpeg" existe no servidor do bot
+    try:
+        with open("fotos/GABI_PIJAMA.jpeg", "rb") as foto:
+            await update.message.reply_photo(
+                photo=foto,
+                caption="Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
+                reply_markup=markup
+            )
+    except FileNotFoundError:
+        print("ERRO: Arquivo de foto GABI_PIJAMA.jpeg não encontrado.")
+        await update.message.reply_text(
+            "Pronto pra perder o juízo?\nEscolha seu plano e garanta acesso ao meu conteúdo EXCLUSIVO! 🔥",
             reply_markup=markup
-        )
+        ) # Envia apenas texto se a foto falhar
 
 async def handle_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     plano_selecionado_id = update.callback_query.data # Ex: "plano_mensal_basico"
 
-    # Guarda o ID do plano selecionado nos dados do usuário para uso posterior
-    context.user_data['plano_selecionado_id'] = plano_selecionado_id
-
-    textos = {
-        "plano_mensal_basico": "*Plano Mensal Básico* - R$ 19,99\n\nPlano Mensal com mais de 100 fotos e vídeos\n\n🔥 Eu sei o que você quer… e vou te dar 😮‍💨🙈",
-        "plano_mensal_premium": "*Plano Mensal Premium* - R$ 39,99\n\nPlano Mensal com mais de 100 fotos e vídeos\nAcesso vitalício ao Grupo VIP com novos conteúdos todo dia 🤤\nMeu número pessoal para ter ligações de vídeo diretamente comigo...😈\n\n🔥 Prepare-se pra perder o controle… 🤤🔥",
-    }
-
-    texto_plano = textos.get(plano_selecionado_id, "Plano inválido.")
+    # Pega os detalhes dos planos que foram buscados pela API e armazenados em /start
+    planos_detalhados_cache = context.bot_data.get('planos_detalhados_api', {})
     
-    # Adiciona o nome do plano escolhido na context.user_data para referência, se necessário
-    # (Opcional, mas pode ser útil para mensagens personalizadas)
-    if plano_selecionado_id in textos:
-        # Extrai o nome do plano da string (ex: "Plano Mensal Básico")
-        context.user_data['plano_selecionado_nome'] = texto_plano.splitlines()[0].replace("*", "").strip()
+    # Pega os detalhes do plano específico que foi selecionado
+    detalhes_do_plano_selecionado = planos_detalhados_cache.get(plano_selecionado_id)
 
+    if not detalhes_do_plano_selecionado:
+        await update.callback_query.message.reply_text(
+            "😕 Ops! Não encontrei os detalhes para este plano. "
+            "Por favor, tente selecionar novamente usando /start."
+        )
+        return
 
+    # Guarda o ID do plano selecionado nos dados do usuário para uso em receber_comprovante
+    context.user_data['plano_selecionado_id'] = plano_selecionado_id
+    context.user_data['plano_selecionado_nome'] = detalhes_do_plano_selecionado.get('nome_exibicao', 'Plano Selecionado')
+
+    # Monta a mensagem com os dados dinâmicos do plano
+    nome_plano_formatado = f"*{detalhes_do_plano_selecionado.get('nome_exibicao', '')}* - R${detalhes_do_plano_selecionado.get('preco', 0.0):.2f}"
+    descricao_plano = detalhes_do_plano_selecionado.get('descricao', 'Descrição não disponível.')
+    
+    texto_plano_completo = f"{nome_plano_formatado}\n\n{descricao_plano}"
+
+    # Mensagens para o usuário
     msg_detalhes_plano = (
-        f"{texto_plano}\n\n"
-        "✅ *Envio Imediato!* (Após confirmação do pagamento/comprovante)\n" # Ajuste na mensagem
-        "🔑 Chave Pix: `055.336.041-89` (COPIA E COLA)\n\n" # Exemplo de chave
+        f"{texto_plano_completo}\n\n"
+        "✅ *Envio Imediato!* (Após confirmação do pagamento/comprovante)\n"
+        "🔑 Chave Pix: `055.336.041-89` (COPIA E COLA)\n\n" # LEMBRE-SE DE COLOCAR SUA CHAVE PIX REAL AQUI
     )
     msg_instrucao_comprovante = "Após o pagamento, envie o comprovante aqui neste chat para validarmos seu acesso! 🙈🔥"
 
@@ -229,29 +307,29 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             del context.user_data['plano_selecionado_nome']
 
 
-async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.effective_user.id) != USUARIO_ADMIN:
-        await update.message.reply_text("🚫 Você não tem permissão para isso.")
-        return
-
-    if not context.args:
-        await update.message.reply_text("Uso: /liberar @usuario")
-        return
-
-    username = context.args[0].lstrip("@")
-    chat_id = usuarios_aprovados.get(username)
-
-    if chat_id:
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"✅ Pagamento confirmado!\nBem-vindo ao grupo VIP 🔥\nAcesse o conteúdo aqui: {GRUPO_EXCLUSIVO}"
-            )
-            await update.message.reply_text(f"✅ @{username} liberado com sucesso!")
-        except Exception as e:
-            await update.message.reply_text(f"⚠️ Erro ao notificar @{username}: {e}")
-    else:
-        await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}.")
+#async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE): <---- COMANDO /liberar NO BOT, NAO É MAIS UTILIZADA
+#    if str(update.effective_user.id) != USUARIO_ADMIN:
+#        await update.message.reply_text("🚫 Você não tem permissão para isso.")
+#        return
+#
+#    if not context.args:
+#        await update.message.reply_text("Uso: /liberar @usuario")
+#        return
+#
+#    username = context.args[0].lstrip("@")
+#    chat_id = usuarios_aprovados.get(username)
+#
+#    if chat_id:
+#        try:
+#            await context.bot.send_message(
+#                chat_id=chat_id,
+#                text=f"✅ Pagamento confirmado!\nBem-vindo ao grupo VIP 🔥\nAcesse o conteúdo aqui: {GRUPO_EXCLUSIVO}"
+#            )
+#            await update.message.reply_text(f"✅ @{username} liberado com sucesso!")
+#        except Exception as e:
+#            await update.message.reply_text(f"⚠️ Erro ao notificar @{username}: {e}")
+#    else:
+#        await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}.")
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -417,7 +495,6 @@ async def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("ajuda", ajuda))
     app.add_handler(CommandHandler("meuid", pegar_id))
-    app.add_handler(CommandHandler("liberar", liberar))
     app.add_handler(CallbackQueryHandler(handle_planos))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.PDF, receber_comprovante))
 
