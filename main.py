@@ -3,11 +3,12 @@ import asyncio
 import ssl
 import smtplib
 import requests
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pathlib import Path
 from email.message import EmailMessage
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
-
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, abort
 
@@ -17,6 +18,8 @@ from telegram.ext import (
     CallbackQueryHandler, MessageHandler,
     filters, ContextTypes
 )
+
+FUSO_HORARIO_LOCAL = ZoneInfo("America/Sao_Paulo")
 
 load_dotenv()
 
@@ -46,23 +49,6 @@ bot = None
 pasta_comprovantes = os.path.join(os.getcwd(), "comprovantes")
 os.makedirs(pasta_comprovantes, exist_ok=True)
 
-# Ler aprovados
-# try: <---- DELETAR/COMENTAR ESTE BLOCO
-#    with open("aprovados.txt", "r") as f:
-#        for linha in f:
-#            partes = linha.strip().split(" | ")
-#            if len(partes) == 2:
-#                u, cid = partes
-#               usuarios_aprovados[u] = int(cid)
-#           else:
-#                print(f"[AVISO] Linha ignorada (formato inválido): {linha.strip()}")
-#except FileNotFoundError:
-#    pass <---- FIM DO BLOCO COMENTADO/DELETADO
-
-#def salvar_aprovados(): <---- COMENTAR/DELETAR FUNCAO
-#    with open("aprovados.txt", "w") as f:
-#        for u, cid in usuarios_aprovados.items():
-#            f.write(f"{u}|{cid}\n") <---- FIM DA FUNCAO DELETADA/COMENTADA
 
 def enviar_email_comprovante(dest, assunto, corpo, arquivo_path):
     msg = EmailMessage()
@@ -307,30 +293,6 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
             del context.user_data['plano_selecionado_nome']
 
 
-#async def liberar(update: Update, context: ContextTypes.DEFAULT_TYPE): <---- COMANDO /liberar NO BOT, NAO É MAIS UTILIZADA
-#    if str(update.effective_user.id) != USUARIO_ADMIN:
-#        await update.message.reply_text("🚫 Você não tem permissão para isso.")
-#        return
-#
-#    if not context.args:
-#        await update.message.reply_text("Uso: /liberar @usuario")
-#        return
-#
-#    username = context.args[0].lstrip("@")
-#    chat_id = usuarios_aprovados.get(username)
-#
-#    if chat_id:
-#        try:
-#            await context.bot.send_message(
-#                chat_id=chat_id,
-#                text=f"✅ Pagamento confirmado!\nBem-vindo ao grupo VIP 🔥\nAcesse o conteúdo aqui: {GRUPO_EXCLUSIVO}"
-#            )
-#            await update.message.reply_text(f"✅ @{username} liberado com sucesso!")
-#        except Exception as e:
-#            await update.message.reply_text(f"⚠️ Erro ao notificar @{username}: {e}")
-#    else:
-#        await update.message.reply_text(f"⚠️ Não encontrei o chat_id de @{username}.")
-
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = user.id
@@ -412,11 +374,78 @@ async def definir_comandos(app):
         BotCommand("planos", "Ver os planos novamente"),
         BotCommand("status", "Verificar se já foi aprovado"),
         BotCommand("meuid", "Verifica qual o seu ID"),
-        BotCommand("ajuda", "Explica como funciona o bot"),
-        BotCommand("liberar", "Admin: liberar acesso de um usuário")
+        BotCommand("ajuda", "Explica como funciona o bot")
     ]
     
     await bot.set_my_commands(comandos)
+
+async def verificar_e_notificar_expiracoes(context: ContextTypes.DEFAULT_TYPE):
+    print(f"[{datetime.now()}] Executando verificação de assinaturas expirando...")
+    bot_instance = context.bot # Maneira correta de pegar a instância do bot dentro de um job do PTB
+    
+    # Vamos verificar para diferentes janelas (ex: 7 dias, 3 dias, 1 dia)
+    # Você pode configurar quais janelas quer e os tipos correspondentes
+    janelas_de_aviso = [
+        {"dias": 7, "tipo_notificacao": "exp_7d", "mensagem": "Sua assinatura do {nome_plano} está quase expirando! Ela termina em {data_fim_formatada}. Não perca o acesso!"},
+        {"dias": 3, "tipo_notificacao": "exp_3d", "mensagem": "Atenção! Sua assinatura do {nome_plano} expira em 3 dias ({data_fim_formatada}). Renove para continuar aproveitando!"},
+        {"dias": 1, "tipo_notificacao": "exp_1d", "mensagem": "Último aviso! Sua assinatura do {nome_plano} expira amanhã ({data_fim_formatada})! Renove agora mesmo."}
+    ]
+
+    for janela in janelas_de_aviso:
+        dias_ate_expirar = janela["dias"]
+        tipo_notificacao_atual = janela["tipo_notificacao"]
+        mensagem_template = janela["mensagem"]
+        
+        api_url_expirando = f"{API_PAINEL_URL}/api/bot/assinaturas_expirando"
+        params_api = {
+            "chave_api_bot": CHAVE_PAINEL, # CHAVE_PAINEL é o os.getenv("CHAVE_PAINEL") no bot
+            "dias_ate_expirar": dias_ate_expirar,
+            "tipo_janela_notificacao": tipo_notificacao_atual
+        }
+
+        try:
+            response = requests.get(api_url_expirando, params=params_api, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("status") == "sucesso" and data.get("assinaturas"):
+                print(f"  Encontradas {len(data['assinaturas'])} assinaturas para notificar ({tipo_notificacao_atual}).")
+                for assinatura in data["assinaturas"]:
+                    chat_id = assinatura["chat_id_usuario"]
+                    nome_usuario = assinatura.get("first_name", "Usuário") # Para personalizar
+                    mensagem_final = mensagem_template.format(
+                        nome_plano=assinatura["nome_plano"],
+                        data_fim_formatada=assinatura["data_fim_formatada"]
+                    )
+                    
+                    try:
+                        await bot_instance.send_message(chat_id=chat_id, text=f"Olá {nome_usuario},\n{mensagem_final}\n\nUse /renovar para estender seu acesso ou contate o suporte.")
+                        print(f"    Notificação {tipo_notificacao_atual} enviada para chat_id: {chat_id}")
+
+                        # Marcar como notificado no painel
+                        api_url_marcar = f"{API_PAINEL_URL}/api/bot/marcar_notificacao_expiracao"
+                        payload_marcar = {
+                            "chave_api_bot": CHAVE_PAINEL,
+                            "id_assinatura": assinatura["id_assinatura"],
+                            "tipo_notificacao": tipo_notificacao_atual
+                        }
+                        resp_marcar = requests.post(api_url_marcar, json=payload_marcar, timeout=10)
+                        if resp_marcar.status_code != 200:
+                            print(f"    ERRO ao marcar notificação para id_assinatura {assinatura['id_assinatura']}: {resp_marcar.text}")
+                    
+                    except Exception as e_send:
+                        print(f"    ERRO ao enviar mensagem para chat_id {chat_id}: {e_send}")
+            elif data.get("status") != "sucesso":
+                 print(f"  API /assinaturas_expirando retornou erro: {data.get('mensagem')}")
+
+
+        except requests.exceptions.RequestException as e_req:
+            print(f"  Erro de requisição ao buscar assinaturas ({tipo_notificacao_atual}): {e_req}")
+        except Exception as e_geral:
+             print(f"  Erro geral ao processar {tipo_notificacao_atual}: {e_geral}")
+    
+    print(f"[{datetime.now()}] Verificação de expirações concluída.")
+
 
 flask_app = Flask(__name__)
 app = None
