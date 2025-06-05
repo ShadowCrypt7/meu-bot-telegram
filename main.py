@@ -1,5 +1,6 @@
 import os
 import asyncio
+from sched import scheduler
 import ssl
 import smtplib
 import requests
@@ -518,6 +519,11 @@ async def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
     bot = app.bot
+
+    scheduler = AsyncIOScheduler(timezone=str(FUSO_HORARIO_LOCAL))
+    scheduler.add_job(verificar_e_notificar_expiracoes, 'cron', hour=9, minute=0, 
+                  kwargs={'context': app}) 
+    scheduler.start()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("planos", start))
